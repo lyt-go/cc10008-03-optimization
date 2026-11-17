@@ -55,6 +55,9 @@
             >
               {{ action }}
             </button>
+            <button class="link" type="button" @click="loadReceipt(String(row['事件编号']))">
+              跨模块契约回执
+            </button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -62,6 +65,22 @@
         </tr>
       </tbody>
     </table>
+
+    <div v-if="receipt" class="receipt-box">
+      <h3>跨模块回执 · {{ receipt.eventCode }} · 契约版本 {{ receipt.contractVersion }}</h3>
+      <p class="status-legend">
+        <span class="legend-item">埋点事件契约来源：{{ receipt.specOrigin }}</span>
+        <span class="legend-item">参数契约来源：{{ receipt.paramOrigin }}</span>
+        <span class="legend-item">覆盖率：{{ (receipt.coverage * 100).toFixed(1) }}%</span>
+        <span class="legend-item">发布批次：#{{ receipt.publicationId ?? 0 }}</span>
+      </p>
+      <ul class="receipt-list">
+        <li v-for="param in receipt.parameters" :key="param.paramCode">
+          {{ param.paramCode }}（{{ param.paramName }}，{{ param.paramType }}）版本
+          {{ param.version || '空' }} —— 来源 {{ param.origin }}
+        </li>
+      </ul>
+    </div>
 
     <footer class="page-foot">
       <span>共 {{ total }} 条事件规范记录</span>
@@ -75,10 +94,12 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  fetchContractReceipt,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import type { ContractReceipt } from '@/contract/contract-types'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('eventspec')
@@ -90,6 +111,7 @@ const stats = [{"label": "事件定义总数", "value": 0}, {"label": "已发布
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const receipt = ref<ContractReceipt | null>(null)
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -133,5 +155,30 @@ function reload() {
   }
 }
 
+function loadReceipt(eventCode: string) {
+  receipt.value = fetchContractReceipt(eventCode)
+}
+
 onMounted(reload)
 </script>
+
+<style scoped>
+.receipt-box {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 8px;
+}
+
+.receipt-box h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.receipt-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+</style>

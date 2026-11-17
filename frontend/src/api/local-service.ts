@@ -1,5 +1,21 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  getContract,
+  getCoverageSummary,
+  getCrossModuleReceipt,
+  inspectDataFlow,
+  listContractDiffs,
+  listContracts,
+  listPublications,
+  resetContracts,
+  submitParameterChange,
+  verifyNoDrift,
+} from '@/contract/contract-store'
+import type {
+  ContractReceipt,
+  ParameterChangeResult,
+} from '@/contract/contract-types'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -102,4 +118,84 @@ export function loadOverview(): OverviewResult {
     { label: '异常量', value: modules.reduce((sum, item) => sum + item.abnormal, 0) },
   ]
   return { cards, modules }
+}
+
+// ---------------------------------------------------------------------------
+// 发布版事件参数契约：参数字典 -> 局部重建 -> 增量发布，统一在服务层写状态。
+// ---------------------------------------------------------------------------
+
+const PARAM_FIELDS = [
+  '参数名称',
+  '参数类型',
+  '枚举范围',
+  '所属事件',
+  '数据来源',
+  '匿名化处理',
+  '版本号',
+] as const
+type ParamPatch = Partial<Record<(typeof PARAM_FIELDS)[number], string>>
+
+/**
+ * 修改参数字典中的一个参数，并触发发布版事件参数契约的局部重建。
+ * 页面不直接拼契约逻辑，只把参数补丁与幂等键交进来。
+ */
+export async function updateParameterDefinition(input: {
+  paramCode: string
+  patch: ParamPatch
+  idempotencyKey?: string
+  mode?: 'narrow' | 'expand'
+}): Promise<ParameterChangeResult> {
+  const rows = listRows('paramdef')
+  const index = rows.findIndex((row) => String(row['参数编号']) === input.paramCode)
+  if (index < 0) {
+    throw new Error(`参数字典中没有编号为 ${input.paramCode} 的参数定义`)
+  }
+  const next = [...rows]
+  next[index] = { ...rows[index], ...input.patch }
+  saveRows('paramdef', next)
+  return submitParameterChange({
+    changedParamCodes: [input.paramCode],
+    idempotencyKey: input.idempotencyKey,
+    mode: input.mode,
+  })
+}
+
+export function getEventParameterContracts() {
+  return listContracts()
+}
+
+export function getEventParameterContract(eventCode: string) {
+  return getContract(eventCode)
+}
+
+export function getContractDiffLedger() {
+  return listContractDiffs()
+}
+
+export function getContractPublications() {
+  return listPublications()
+}
+
+export function getContractCoverage() {
+  return getCoverageSummary()
+}
+
+/** 跨模块回执：事件规范模块读取埋点事件契约，保留 eventspec/paramdef 双来源。 */
+export function fetchContractReceipt(eventCode: string): ContractReceipt | null {
+  return getCrossModuleReceipt(eventCode)
+}
+
+export function checkContractDrift() {
+  return verifyNoDrift()
+}
+
+export function traceContractDataFlow() {
+  return inspectDataFlow()
+}
+
+export function resetEventParameterContracts(): ActionResult {
+  resetContracts()
+  resetRows('paramdef')
+  resetRows('eventspec')
+  return { ok: true, message: '契约状态与事件规范/参数字典已回到示例基线' }
 }

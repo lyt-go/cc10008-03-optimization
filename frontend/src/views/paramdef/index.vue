@@ -7,6 +7,7 @@
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记参数定义</button>
+        <RouterLink class="btn" to="/contract">查看发布版事件参数契约</RouterLink>
         <button class="btn" type="button" @click="exportRows">导出参数字典清单</button>
       </div>
     </header>
